@@ -1,0 +1,247 @@
+---
+title: "Datos policiales de Costa Rica 2021"
+output: 
+  flexdashboard::flex_dashboard:
+    theme : readable 
+    orientation: rows
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+```{r carga-paquetes, message=FALSE, warning=FALSE}
+
+library(DT)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(lubridate)
+library(readxl)
+library(sf)
+library(leaflet)
+library(stringi)
+```
+
+```{r datos-cantones, message=FALSE, warning=FALSE}
+cantones <-
+  st_read(dsn = "cantones_simplificados.geojson", quiet = TRUE) %>%
+  st_transform(4326)
+```
+
+```{r datos-delitos, message=FALSE, warning=FALSE}
+delitos <- read_xls(path="estadisticaspoliciales2021.xls")
+delitos=subset(delitos, select=c("Delito", "Fecha", "Victima", "Edad", "Genero", "Provincia", "Canton"))
+```
+
+
+Row {data-height=530}
+-----------------------------------------------------------------------
+
+### **Curso: Procesamiento de datos geográficos** 
+
+**Profesor**
+
+      Manuel Vargas del Valle
+**Estudiante**
+
+      Sofía Carpio Jiménez - C11657    
+**Fuentes** 
+
+  [Organismo de Investigación Judicial (OIJ)](https://sitiooij.poder-judicial.go.cr/index.php/ayuda/servicios-policiales/servicios-a-organizaciones/indice-de-transparencia-del-sector-publico-costarricense/datos-abiertos) 
+
+  [Instituto Geográfico Nacional (IGN)](https://www.snitcr.go.cr/ign_ign).  
+
+
+### Mapa
+
+```{r, message=FALSE, warning=FALSE}
+cantones <-
+  cantones %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(canton, id = "Latin-ASCII")))
+delitos <-
+  delitos %>%
+  mutate(Canton = if_else(Canton == "LEON CORTES", "LEON CORTES CASTRO", Canton)) %>%
+  mutate(Canton = if_else(Canton == "VASQUEZ DE CORONADO", "VAZQUEZ DE CORONADO", Canton))
+delitos <-
+  delitos %>%
+  mutate(canton_normalizado = tolower(stri_trans_general(Canton, id = "Latin-ASCII")))
+```
+
+```{r, message=FALSE, warning=FALSE}
+delitos <-
+  delitos %>%
+  left_join(
+    dplyr::select(
+      st_drop_geometry(cantones),
+      cod_canton,
+      canton_normalizado
+    ),
+    by = "canton_normalizado",
+    copy = FALSE,
+    keep = FALSE
+  )
+```
+
+```{r, message=FALSE, warning=FALSE}
+delitos_canton <-
+  delitos %>%
+  count(cod_canton, name = "estadisticas")
+cantones_delitos <-
+  cantones %>%
+  left_join(
+    delitos_canton,
+    by = "cod_canton",
+    copy = FALSE,
+    keep = FALSE
+  )
+```
+
+```{r, paleta_color, message=FALSE, warning=FALSE}
+colores_delitos <-
+  colorNumeric(palette = "Reds",
+               domain = cantones_delitos$delitos,
+               na.color = "transparent")
+```
+
+```{r, mapa_coropletas, message=FALSE, warning=FALSE}
+leaflet() %>%
+  setView(
+    lng = -84.19452,
+    lat = 9.572735,
+    zoom = 7) %>%
+  addTiles(group = "OpenStreetMap") %>% 
+  addPolygons(
+    data = cantones_delitos,
+    fillColor = ~ colores_delitos(cantones_delitos$estadisticas),
+    fillOpacity = 0.8,
+    color = "black",
+    stroke = TRUE,
+    weight = 1.0,
+    popup = paste(
+      paste(
+        "<strong>Cantón:</strong>",
+        cantones_delitos$canton
+      ),
+      paste(
+        "<strong>Delitos:</strong>",
+        cantones_delitos$estadisticas
+      ),
+      sep = '<br/>'
+    ),
+    group = "Delitos en cantones"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap"),
+    overlayGroups = c("Delitos en cantones")
+  ) %>%
+  addLegend(
+    position = "bottomleft",
+    pal = colores_delitos,
+    values = cantones_delitos$estadisticas,
+    group = "Delitos",
+    title = "Cantidad de delitos"
+  )
+```
+
+Row {.tabset}
+-----------------------------------------------------------------------
+
+### Tabla
+```{r, message=FALSE, warning=FALSE}
+delitos %>%
+  dplyr::select(Delito,
+                Fecha,
+                Victima, 
+                Edad, 
+                Genero, 
+                Provincia, 
+                Canton,
+                ) %>%
+  datatable(
+    colnames = c("Delito","Fecha","Víctima","Edad","Género","Provincia","Cantón"),
+    options = list(
+      pageLength = 10,
+      language = list(url = '//cdn.datatables.net/plug-ins/1.10.11/i18n/Spanish.json')
+      )
+    )
+```
+
+### Gráfico de delitos por tipo de delito 
+
+```{r grafico-barras-simples-por-delito, message=FALSE}
+# Gráfico de barras simples de cantidad de delitos por tipo 
+
+grafico_x_delito <-
+  delitos %>%
+  count(Delito) %>% 
+  ggplot(aes(x = reorder(Delito, n), y = n)) +
+  geom_bar(stat = "identity", fill = "#FF5D5D") +
+  ggtitle("CANTIDAD DE DELITOS POR TIPO DE DELITOS") +
+  xlab("TIPO DE DELITO") +
+  ylab("CANTIDAD") +
+  coord_flip() + 
+  theme_minimal()
+
+ggplotly(grafico_x_delito)
+```
+
+### Gráfico de delitos por víctima 
+
+```{r}
+grafico_x_victima <-
+  delitos %>%
+  count(Victima) %>% 
+  ggplot(aes(x = reorder(Victima, n), y = n)) +
+  geom_bar(stat = "identity", fill = "#DD4A48") +
+  ggtitle("CANTIDAD DE DELITOS POR VÍCTIMA") +
+  xlab("VÍCTIMA") +
+  ylab("CANTIDAD") +
+  coord_flip() + 
+  theme_minimal()
+
+ggplotly(grafico_x_victima)
+```
+
+### Gráfico de delito por mes
+
+```{r grafico-barras-simples-por-mes, message=FALSE}
+delitos <-
+delitos %>%
+mutate(fecha = lubridate::month(Fecha))
+mes <-c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre")
+```
+
+```{r}
+grafico_x_mes <-
+  delitos%>%
+  count(fecha) %>%
+  ggplot(level =level_order,(aes(x = reorder(mes, fecha), y = n)))  +
+  geom_bar(stat = "identity", fill = "#C01616") +
+  ggtitle("DELITOS POR MES EN EL AÑO 2021") +
+  xlab("MES") +
+  ylab("CANTIDAD") +
+  theme_minimal()
+
+ggplotly(grafico_x_mes)
+```
+
+### Gráfico de delitos por género 
+
+```{r grafico-barras-apiladas-por-genero,message=FALSE}
+# Gráfico de barras apiladas de proporciones por genero 
+grafico_barras_apiladas_proporciones <-
+  delitos %>%
+  ggplot(aes(x = Delito, fill = Genero)) +
+  geom_bar(position = "fill") +
+  ggtitle("PROPORCIONES DE DELITOS POR GÉNERO") +
+  xlab("TIPO DE DELITO") +
+  ylab("PROPORCIÓN") +
+  labs(fill = "GÉNERO") +
+  scale_fill_manual(values = c("#ECB390", "#DF7861", "#EB4747")) +
+  coord_flip() +
+  theme_minimal() 
+  
+
+ggplotly(grafico_barras_apiladas_proporciones)
+```
