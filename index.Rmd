@@ -35,17 +35,17 @@ delitos=subset(delitos, select=c("Delito", "Fecha", "Victima", "Edad", "Genero",
 ```
 
 
-Row {data-height=530}
+Row {data-height=550}
 -----------------------------------------------------------------------
 
 ### **Curso: Procesamiento de datos geográficos** 
 
-**Profesor**
+    Profesor 
+         Manuel Vargas del Valle 
 
-      Manuel Vargas del Valle
-**Estudiante**
-
-      Sofía Carpio Jiménez - C11657    
+    Estudiante 
+         Sofía Carpio Jiménez - C11657  
+    
 **Fuentes** 
 
   [Organismo de Investigación Judicial (OIJ)](https://sitiooij.poder-judicial.go.cr/index.php/ayuda/servicios-policiales/servicios-a-organizaciones/indice-de-transparencia-del-sector-publico-costarricense/datos-abiertos) 
